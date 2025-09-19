@@ -7,8 +7,10 @@ import {
   StyleSheet,
   ScrollView,
   Alert,
+  ActivityIndicator, // 로딩 아이콘을 위해 추가
 } from "react-native";
 import { useRouter } from "expo-router";
+import api from "../src/api"; // 👈 API 클라이언트 import
 
 // --- 유효성 검사 함수 ---
 const validateEmail = (email: string) => {
@@ -19,11 +21,17 @@ const validateEmail = (email: string) => {
 const validateId = (id: string) => {
   const regex = /^[a-zA-Z0-9]{6,20}$/;
   return regex.test(id);
-}
+};
+
+// 👈 비밀번호 유효성 검사 함수 추가
+const validatePassword = (password: string) => {
+  const regex = /^(?=.*[a-zA-Z])(?=.*\d).{8,20}$/;
+  return regex.test(password);
+};
 
 export default function RegisterScreen() {
   const router = useRouter();
-  
+
   // 입력 값 상태 관리
   const [id, setId] = useState("");
   const [password, setPassword] = useState("");
@@ -31,6 +39,7 @@ export default function RegisterScreen() {
   const [email, setEmail] = useState("");
   const [gender, setGender] = useState<"male" | "female" | null>(null);
   const [birthDate, setBirthDate] = useState("");
+  const [isLoading, setIsLoading] = useState(false); // 로딩 상태
 
   // 유효성 검사 에러 메시지 상태
   const [idError, setIdError] = useState("");
@@ -49,6 +58,15 @@ export default function RegisterScreen() {
       setIdError("");
     }
   };
+  
+  // 👈 비밀번호 onBlur 핸들러 추가
+  const handlePasswordBlur = () => {
+    if (password && !validatePassword(password)) {
+      setPasswordError("비밀번호는 영문, 숫자를 포함하여 8~20자로 입력해주세요.");
+    } else {
+      setPasswordError("");
+    }
+  };
 
   const handleEmailBlur = () => {
     if (email && !validateEmail(email)) {
@@ -61,43 +79,67 @@ export default function RegisterScreen() {
   const handleConfirmPasswordBlur = () => {
     if (confirmPassword && password !== confirmPassword) {
       setPasswordError("비밀번호가 일치하지 않습니다.");
-    } else {
+    } else if (password && validatePassword(password)) {
+      // 비밀번호가 유효성 검사를 통과했을 때만 에러 메시지를 지웁니다.
       setPasswordError("");
     }
   };
-
+  
   const handleBirthDateChange = (text: string) => {
     const filteredText = text.replace(/[^0-9]/g, "");
     setBirthDate(filteredText);
   };
 
-  // 아이디 중복 확인 핸들러
-  const handleCheckId = () => {
+  // --- API 연동 핸들러 ---
+
+  // 아이디 중복 확인 핸들러 (API 연동)
+  const handleCheckId = async () => {
     if (!id || !validateId(id)) {
       Alert.alert("알림", "아이디는 영문, 숫자를 사용하여 6~20자로 입력해주세요.");
       return;
     }
-    // TODO: 백엔드 API 연동
-    console.log("아이디 중복 확인:", id);
-    Alert.alert("알림", "사용 가능한 아이디입니다.");
-    setIsIdChecked(true);
+    setIsLoading(true);
+    try {
+      await api.post('/users/check-id', { loginId: id });
+      Alert.alert("알림", "사용 가능한 아이디입니다.");
+      setIsIdChecked(true);
+    } catch (error: any) {
+      setIsIdChecked(false);
+      if (error.response && error.response.data && error.response.data.message) {
+        Alert.alert("알림", error.response.data.message);
+      } else {
+        Alert.alert("오류", "서버와 통신 중 문제가 발생했습니다.");
+      }
+    } finally {
+      setIsLoading(false);
+    }
   };
 
-  // 이메일 중복 확인 핸들러
-  const handleCheckEmail = () => {
+  // 이메일 중복 확인 핸들러 (API 연동)
+  const handleCheckEmail = async () => {
     if (!email || !validateEmail(email)) {
       Alert.alert("알림", "올바른 이메일 형식이 아닙니다.");
       return;
     }
-    // TODO: 백엔드 API 연동
-    console.log("이메일 중복 확인:", email);
-    Alert.alert("알림", "사용 가능한 이메일입니다.");
-    setIsEmailChecked(true);
+    setIsLoading(true);
+    try {
+      await api.post('/users/check-email', { email: email });
+      Alert.alert("알림", "사용 가능한 이메일입니다.");
+      setIsEmailChecked(true);
+    } catch (error: any) {
+      setIsEmailChecked(false);
+      if (error.response && error.response.data && error.response.data.message) {
+        Alert.alert("알림", error.response.data.message);
+      } else {
+        Alert.alert("오류", "서버와 통신 중 문제가 발생했습니다.");
+      }
+    } finally {
+      setIsLoading(false);
+    }
   };
 
-  // 회원가입 핸들러
-  const handleRegister = () => {
-    // 1. 중복 확인 여부 먼저 검사
+  // 회원가입 핸들러 (API 연동)
+  const handleRegister = async () => {
     if (!isIdChecked) {
       Alert.alert("알림", "아이디 중복 확인을 완료해주세요.");
       return;
@@ -106,9 +148,7 @@ export default function RegisterScreen() {
       Alert.alert("알림", "이메일 중복 확인을 완료해주세요.");
       return;
     }
-
-    // 2. 다른 유효성 검사 및 빈 값 검사
-    if (idError || emailError || passwordError) {
+    if (idError || emailError || passwordError || !validatePassword(password)) {
       Alert.alert("알림", "입력 정보를 다시 확인해주세요.");
       return;
     }
@@ -121,13 +161,32 @@ export default function RegisterScreen() {
         return;
     }
 
-    // 3. 모든 검사를 통과하면 회원가입 처리
-    console.log("회원가입 정보:", { id, password, email, gender, birthDate });
-    Alert.alert("성공", "회원가입이 완료되었습니다.", [
-      { text: "OK", onPress: () => router.back() },
-    ]);
-  };
+    setIsLoading(true);
+    try {
+      const response = await api.post('/users/signup', {
+        loginId: id,
+        password: password,
+        email: email,
+        gender: gender.toUpperCase(), // "male" -> "MALE"
+        birthDate: birthDate,
+      });
 
+      if (response.data.success) {
+        Alert.alert("성공", "회원가입이 완료되었습니다. 로그인 페이지로 이동합니다.", [
+          { text: "확인", onPress: () => router.back() },
+        ]);
+      }
+    } catch (error: any) {
+      if (error.response && error.response.data && error.response.data.message) {
+        Alert.alert("회원가입 실패", error.response.data.message);
+      } else {
+        Alert.alert("회원가입 실패", "서버와 통신 중 문제가 발생했습니다.");
+      }
+    } finally {
+      setIsLoading(false);
+    }
+  };
+  
   return (
     <ScrollView style={styles.container} contentContainerStyle={{paddingBottom: 50}}>
       <Text style={styles.headerTitle}>회원가입</Text>
@@ -149,8 +208,9 @@ export default function RegisterScreen() {
               }}
               onBlur={handleIdBlur}
               maxLength={20}
+              autoCapitalize="none"
             />
-            <TouchableOpacity style={styles.checkButton} onPress={handleCheckId}>
+            <TouchableOpacity style={styles.checkButton} onPress={handleCheckId} disabled={isLoading}>
               <Text style={styles.checkButtonText}>중복확인</Text>
             </TouchableOpacity>
           </View>
@@ -161,7 +221,7 @@ export default function RegisterScreen() {
         <View style={styles.inputContainer}>
           <TextInput
             style={[styles.input, passwordError ? styles.inputError : null]}
-            placeholder="비밀번호"
+            placeholder="비밀번호 (영문, 숫자 포함 8~20자)"
             placeholderTextColor="#999"
             secureTextEntry
             value={password}
@@ -169,6 +229,8 @@ export default function RegisterScreen() {
               setPassword(text);
               if(passwordError) setPasswordError("");
             }}
+            onBlur={handlePasswordBlur}
+            maxLength={20}
           />
           <Text style={styles.errorText}>{passwordError || ""}</Text>
         </View>
@@ -186,6 +248,7 @@ export default function RegisterScreen() {
               if(passwordError) setPasswordError("");
             }}
             onBlur={handleConfirmPasswordBlur}
+            maxLength={20}
           />
           <Text style={styles.errorText}>{passwordError || ""}</Text>
         </View>
@@ -207,7 +270,7 @@ export default function RegisterScreen() {
               }}
               onBlur={handleEmailBlur}
             />
-            <TouchableOpacity style={styles.checkButton} onPress={handleCheckEmail}>
+            <TouchableOpacity style={styles.checkButton} onPress={handleCheckEmail} disabled={isLoading}>
               <Text style={styles.checkButtonText}>중복확인</Text>
             </TouchableOpacity>
           </View>
@@ -244,13 +307,17 @@ export default function RegisterScreen() {
             <View style={{height: 18}} />
         </View>
         
-
         {/* 회원가입 버튼 */}
         <TouchableOpacity
             style={styles.registerBtn}
             onPress={handleRegister}
+            disabled={isLoading}
         >
+          {isLoading ? (
+            <ActivityIndicator color="#fff" />
+          ) : (
             <Text style={styles.registerText}>회원가입</Text>
+          )}
         </TouchableOpacity>
       </View>
     </ScrollView>
@@ -355,9 +422,6 @@ const styles = StyleSheet.create({
     color: "#fff",
     fontSize: 16,
     fontWeight: "600",
-  },
-  disabledBtn: {
-    backgroundColor: "#ccc",
   },
 });
 
