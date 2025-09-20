@@ -5,7 +5,9 @@ export default function MainLayout() {
   return (
     <Stack>
       <Stack.Screen name="index" options={{ title: '메인 홈' }} />
-      <Stack.Screen name="intro" options={{ title: '소개' }} />
+      <Stack.Screen 
+        name="intro" 
+        options={{ headerShown: false }} />
       {/* 여기에 로그인 후 필요한 다른 화면들을 계속 추가할 수 있습니다. */}
     </Stack>
   );

@@ -5,19 +5,53 @@ import {
   TextInput,
   TouchableOpacity,
   StyleSheet,
-  Image, // Image 컴포넌트를 import 합니다.
+  Image,
+  Alert,
+  ActivityIndicator, // 👈 로딩 아이콘을 위해 추가
 } from "react-native";
 import { useRouter } from "expo-router";
+import api from "../src/api"; // 👈 API 클라이언트 import
+import { useAuth } from "../../app/src/context/AuthContext"; // 👈 useAuth 훅 import
 
 export default function LoginScreen() {
   const router = useRouter();
+  const { signIn } = useAuth(); // 👈 AuthContext의 signIn 함수를 가져옵니다.
   const [loginId, setLoginId] = useState("");
   const [password, setPassword] = useState("");
+  const [isLoading, setIsLoading] = useState(false); // 👈 로딩 상태 추가
 
-  const handleLogin = () => {
-    // TODO: 백엔드 로그인 API 연동
-    console.log("로그인 시도:", loginId, password);
-    router.replace("/intro"); // 로그인 성공 시 메인 그룹의 intro 화면으로 이동
+  const handleLogin = async () => {
+    if (!loginId || !password) {
+      Alert.alert("알림", "아이디와 비밀번호를 모두 입력해주세요.");
+      return;
+    }
+    setIsLoading(true);
+    try {
+      // 1. 백엔드에 로그인 요청
+      const response = await api.post("/users/login", {
+        loginId: loginId,
+        password: password,
+      });
+
+      const accessToken = response.data.data.accessToken;
+
+      if (accessToken) {
+        // 2. 로그인 성공 시, signIn 함수를 호출하여 전역 상태를 업데이트합니다.
+        // 이제 화면 이동은 _layout.tsx가 알아서 처리해 줄 것입니다.
+        await signIn(accessToken);
+      } else {
+        // 토큰이 없는 경우의 예외 처리
+        Alert.alert("로그인 실패", "인증 정보가 올바르지 않습니다.");
+      }
+    } catch (error: any) {
+      if (error.response?.data?.message) {
+        Alert.alert("로그인 실패", error.response.data.message);
+      } else {
+        Alert.alert("로그인 실패", "서버와 통신 중 문제가 발생했습니다.");
+      }
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
@@ -25,7 +59,7 @@ export default function LoginScreen() {
       {/* 상단 로고 영역 */}
       <View style={styles.upperSection}>
         <Image
-          source={require("../../assets/logo.png")} // 올바른 상대 경로로 수정했습니다.
+          source={require("../../assets/logo.png")}
           style={styles.logo}
         />
       </View>
@@ -39,6 +73,7 @@ export default function LoginScreen() {
           placeholderTextColor="#999"
           value={loginId}
           onChangeText={setLoginId}
+          autoCapitalize="none"
         />
 
         {/* 비밀번호 입력 */}
@@ -63,14 +98,22 @@ export default function LoginScreen() {
         </View>
 
         {/* 로그인 버튼 */}
-        <TouchableOpacity style={styles.loginBtn} onPress={handleLogin}>
-          <Text style={styles.loginText}>로그인</Text>
+        <TouchableOpacity
+          style={styles.loginBtn}
+          onPress={handleLogin}
+          disabled={isLoading}
+        >
+          {isLoading ? (
+            <ActivityIndicator color="#fff" />
+          ) : (
+            <Text style={styles.loginText}>로그인</Text>
+          )}
         </TouchableOpacity>
 
         {/* 회원가입 버튼 */}
         <TouchableOpacity
           style={styles.registerBtn}
-          onPress={() => router.push("/register")} // (auth) 그룹 내에서는 경로를 간단히 씁니다.
+          onPress={() => router.push("/register")}
         >
           <Text style={styles.registerText}>회원가입</Text>
         </TouchableOpacity>
@@ -87,21 +130,21 @@ const styles = StyleSheet.create({
   upperSection: {
     flex: 1,
     alignItems: 'center',
-    justifyContent: 'flex-end', // 로고를 상단 영역의 맨 아래로 보냅니다.
+    justifyContent: 'flex-end',
   },
   lowerSection: {
-    flex: 2, // 하단 영역이 상단보다 더 많은 공간을 차지하게 합니다.
+    flex: 2,
     paddingHorizontal: 24,
-    justifyContent: 'center', // 입력 폼을 하단 영역의 중앙에 위치시킵니다.
+    justifyContent: 'center',
   },
   logo: {
-    width: 100, // 로고 크기 조정
-    height: 100, // 로고 크기 조정
-    marginBottom: 70, // 로고와 하단 영역 사이의 최소 간격
+    width: 100,
+    height: 100,
+    marginBottom: 70,
     resizeMode: "contain",
-    //borderRadius: 60, // 원형 테두리를 위해 너비/높이의 절반 값
-    borderWidth: 3,   // 테두리 두께
-    borderColor: '#e9b7c2ff', // 테두리 색상 (연한 회색)
+    borderWidth: 3,
+    borderColor: '#e9b7c2ff',
+
   },
   input: {
     borderBottomWidth: 1,

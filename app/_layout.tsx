@@ -1,51 +1,32 @@
-// 파일 경로: app/_layout.tsx
-
 import { Slot, useRouter, useSegments } from 'expo-router';
-import { useEffect, useState } from 'react';
+import { useEffect } from 'react';
 import { ActivityIndicator, View } from 'react-native';
-
-// 가상의 로그인 확인 로직 (나중에 실제 로직으로 교체)
-const useAuth = () => {
-  return { isSignedIn: false }; 
-};
+import { AuthProvider, useAuth } from '../app/src/context/AuthContext'; // 👈 AuthProvider와 useAuth를 import
 
 // 이 컴포넌트가 실질적인 라우팅 로직을 담당합니다.
 function RootLayoutNav() {
-  const { isSignedIn } = useAuth();
+  const { isSignedIn, isLoading } = useAuth(); // 👈 진짜 useAuth 훅 사용
   const segments = useSegments();
   const router = useRouter();
 
   useEffect(() => {
+    // 로딩 중일 때는 아무것도 하지 않음
+    if (isLoading) return; 
+
     const inAuthGroup = segments[0] === '(auth)';
 
     if (isSignedIn && inAuthGroup) {
       // 로그인 상태인데 (auth) 그룹에 있다면 메인으로 보냄
-      router.replace('/'); 
+      // TODO: 나중에 테스트 기록 여부에 따라 '/' 또는 '/intro'로 분기
+      router.replace('/intro');
     } else if (!isSignedIn && !inAuthGroup) {
       // 비로그인 상태인데 (auth) 그룹 밖에 있다면 로그인으로 보냄
       router.replace('/login');
     }
-  }, [isSignedIn, segments]);
+  }, [isSignedIn, isLoading, segments]);
 
-  // Slot이 현재 경로에 맞는 자식 레이아웃을 렌더링합니다.
-  return <Slot />;
-}
-
-// 이 컴포넌트가 앱의 진정한 시작점입니다.
-export default function RootLayout() {
-  const [isReady, setIsReady] = useState(false);
-
-  useEffect(() => {
-    // 여기에 폰트 로딩, 스플래시 스크린 숨기기 등
-    // 앱이 시작되기 전에 필요한 모든 비동기 작업을 넣습니다.
-    // 지금은 1초간 대기하는 것으로 시뮬레이션합니다.
-    setTimeout(() => {
-      setIsReady(true);
-    }, 1000);
-  }, []);
-
-  // 준비가 안됐으면 로딩 화면을 보여줍니다.
-  if (!isReady) {
+  // 인증 상태 확인 중에는 로딩 화면을 보여줌
+  if (isLoading) {
     return (
       <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
         <ActivityIndicator size="large" />
@@ -53,6 +34,16 @@ export default function RootLayout() {
     );
   }
 
-  // 모든 준비가 끝나면, 라우팅 로직이 담긴 컴포넌트를 렌더링합니다.
-  return <RootLayoutNav />;
+  return <Slot />;
 }
+
+// 이 컴포넌트가 앱의 진정한 시작점입니다.
+export default function RootLayout() {
+  return (
+    // 👈 AuthProvider로 전체 앱을 감싸줍니다.
+    <AuthProvider>
+      <RootLayoutNav />
+    </AuthProvider>
+  );
+}
+
